@@ -1,0 +1,490 @@
+<title>Meet, Think, Repeat</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+/* Layout: a step-through "lab bench" — token columns on the left, the attention grid and the matching code on the right. Teal = meeting (attention), amber = thinking (MLP). */
+:root {
+  --bg: #F3F5F7;
+  --surface: #FFFFFF;
+  --ink: #15202B;
+  --muted: #5A6673;
+  --line: #D8DEE5;
+  --meet: #0D7A72;
+  --think: #B05E0C;
+  --pos: #2556C4;
+  --neg: #C1402C;
+  --font-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E1318; --surface: #161D24; --ink: #E4E9EE; --muted: #95A1AD; --line: #29333D;
+    --meet: #4CBFB1; --think: #E3A158; --pos: #7FA6F5; --neg: #EF7D64;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E1318; --surface: #161D24; --ink: #E4E9EE; --muted: #95A1AD; --line: #29333D;
+  --meet: #4CBFB1; --think: #E3A158; --pos: #7FA6F5; --neg: #EF7D64;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 48px;
+}
+.wrap { max-width: 1100px; margin: 0 auto; display: grid; gap: 20px; }
+h1, h2 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(26px, 4vw, 36px); font-weight: 600; letter-spacing: -0.01em; }
+h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+p { margin: 0; }
+.lede { color: var(--muted); max-width: 68ch; }
+.lede b.m { color: var(--meet); font-weight: 600; }
+.lede b.t { color: var(--think); font-weight: 600; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
+
+/* controls */
+.controls { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; }
+.field { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+label { font-size: 13px; color: var(--muted); }
+input[type="text"] {
+  font-family: var(--font-mono); font-size: 16px; width: 9.5em;
+  padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--ink);
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+.chip {
+  border: 1px solid var(--line); background: transparent; border-radius: 999px;
+  padding: 4px 11px; font-size: 13px; font-family: var(--font-mono);
+}
+.chip:hover { border-color: var(--muted); }
+:focus-visible { outline: 2px solid var(--pos); outline-offset: 2px; }
+
+.timeline { display: flex; flex-wrap: wrap; gap: 6px; }
+.timeline .chip { font-family: var(--font-body); }
+.timeline .chip[data-kind="meet"].on { background: var(--meet); border-color: var(--meet); color: var(--surface); }
+.timeline .chip[data-kind="think"].on { background: var(--think); border-color: var(--think); color: var(--surface); }
+.timeline .chip[data-kind="io"].on { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+.nav { display: flex; gap: 8px; margin-left: auto; }
+.btn { border: 1px solid var(--line); background: var(--bg); border-radius: 6px; padding: 6px 14px; font-weight: 500; }
+.btn:hover { border-color: var(--muted); }
+
+/* main layout */
+.grid { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 880px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.col { display: grid; gap: 20px; min-width: 0; }
+
+/* step caption */
+.caption { display: grid; gap: 6px; }
+.badge { font-family: var(--font-mono); font-size: 12px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; }
+.badge.meet { color: var(--meet); } .badge.think { color: var(--think); } .badge.io { color: var(--muted); }
+.caption p.main { font-size: 16px; max-width: 64ch; }
+.caption p.note { font-size: 13px; color: var(--muted); max-width: 64ch; }
+
+/* stage */
+.stage { position: relative; }
+.arcs { display: block; width: 100%; height: 120px; overflow: visible; }
+.arcs path { fill: none; stroke: var(--meet); stroke-linecap: round; vector-effect: non-scaling-stroke; transition: opacity .3s; }
+.tokens { display: grid; grid-template-columns: repeat(var(--T), minmax(0, 1fr)); }
+.tok {
+  display: grid; gap: 6px; justify-items: center; align-content: start;
+  padding: 10px 3px; margin: 0 2px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--bg); min-width: 0; text-align: center;
+}
+.tok.sel { border-color: var(--meet); box-shadow: 0 0 0 1px var(--meet) inset; }
+.stage[data-kind="think"] .tok.sel, .stage[data-kind="io"] .tok.sel { border-color: var(--line); box-shadow: none; }
+.tok .ch { font-family: var(--font-mono); font-size: clamp(18px, 3.4vw, 28px); font-weight: 500; line-height: 1.1; }
+.tok .seat { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.vec { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; width: min(100%, 64px); }
+.vec i { aspect-ratio: 1; border-radius: 2px; background: var(--line); transition: background-color .45s ease; }
+.meter { width: min(100%, 64px); height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.meter b { display: block; height: 100%; width: 0; background: var(--muted); transition: width .45s ease; }
+.stage[data-kind="meet"] .meter b { background: var(--meet); }
+.stage[data-kind="think"] .meter b { background: var(--think); }
+.tag { font-family: var(--font-mono); font-size: 12px; min-height: 1.6em; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tag.hot { color: var(--meet); font-weight: 500; }
+.tag.no { opacity: .55; }
+.mlp {
+  font-family: var(--font-mono); font-size: 11px; line-height: 1.3; color: var(--think);
+  border: 1.5px solid var(--think); border-radius: 6px; padding: 4px 5px; width: 100%; max-width: 78px;
+  visibility: hidden;
+}
+.stage[data-kind="think"] .mlp { visibility: visible; animation: pulse 1.6s ease-in-out infinite; }
+.mlp small { display: block; color: var(--muted); font-size: 10px; }
+@media (max-width: 520px) { .mlp small { display: none; } }
+@keyframes pulse { 50% { background: color-mix(in srgb, var(--think) 14%, transparent); } }
+@media (prefers-reduced-motion: reduce) {
+  .stage[data-kind="think"] .mlp { animation: none; background: color-mix(in srgb, var(--think) 10%, transparent); }
+  .vec i, .meter b, .arcs path { transition: none; }
+}
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12px; color: var(--muted); margin-top: 12px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+/* prediction */
+.pred { display: grid; gap: 8px; margin-top: 16px; }
+.pred[hidden] { display: none; }
+.bar { display: grid; grid-template-columns: 2.4em minmax(0, 1fr) 3.2em; gap: 10px; align-items: center; font-variant-numeric: tabular-nums; }
+.bar .k { font-family: var(--font-mono); font-size: 16px; text-align: center; }
+.bar .track { height: 14px; background: var(--bg); border-radius: 3px; overflow: hidden; border: 1px solid var(--line); }
+.bar .fill { height: 100%; background: var(--ink); border-radius: 2px; }
+.bar:first-of-type .fill { background: var(--pos); }
+.bar .v { font-size: 13px; color: var(--muted); text-align: right; }
+
+/* attention grid */
+.att-wrap { overflow-x: auto; }
+table.att { border-collapse: separate; border-spacing: 3px; font-variant-numeric: tabular-nums; margin-top: 10px; }
+.att th { font-family: var(--font-mono); font-weight: 500; font-size: 13px; color: var(--muted); padding: 2px 4px; }
+.att td {
+  width: 40px; height: 32px; text-align: center; font-size: 11px; border-radius: 4px;
+  border: 1px solid var(--line); color: var(--ink);
+}
+.att td.masked { background: repeating-linear-gradient(135deg, transparent 0 4px, var(--line) 4px 5px); color: var(--muted); }
+.att tr.selrow th { color: var(--meet); }
+.att tr.selrow td:not(.masked) { border-color: var(--meet); }
+.att-note { font-size: 13px; color: var(--muted); margin-top: 8px; }
+.att .axis { font-family: var(--font-body); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* code */
+pre.code { margin: 10px 0 0; font-family: var(--font-mono); font-size: 13px; line-height: 1.7; overflow-x: auto; }
+pre.code span { display: block; padding: 0 8px; border-radius: 4px; color: var(--muted); white-space: pre; }
+pre.code span.cm { opacity: .7; }
+pre.code span.on { color: var(--ink); font-weight: 500; }
+pre.code span.on.meet { background: color-mix(in srgb, var(--meet) 16%, transparent); }
+pre.code span.on.think { background: color-mix(in srgb, var(--think) 16%, transparent); }
+pre.code span.on.io { background: color-mix(in srgb, var(--pos) 13%, transparent); }
+.fine { font-size: 12px; color: var(--muted); }
+</style>
+
+<div class="wrap">
+  <header style="display:grid;gap:8px">
+    <h1>Meet, Think, Repeat</h1>
+    <p class="lede">How your <code>gpt.py</code> turns characters into a prediction. In every Block, each token first <b class="m">meets</b> the tokens before it (attention), then <b class="t">thinks</b> on its own (MLP), and both results are added to its running notes. Step through it, and click a token to see who it listens to.</p>
+  </header>
+
+  <section class="panel controls" aria-label="Controls">
+    <div class="field">
+      <label for="seq">Input text</label>
+      <input id="seq" type="text" maxlength="8" value="hell" spellcheck="false" autocomplete="off">
+      <span class="field" id="presets"></span>
+    </div>
+    <div class="nav">
+      <button class="btn" id="prev" type="button">← Back</button>
+      <button class="btn" id="play" type="button">Play</button>
+      <button class="btn" id="next" type="button">Next →</button>
+    </div>
+    <div class="timeline" id="timeline" style="flex-basis:100%"></div>
+  </section>
+
+  <div class="grid">
+    <div class="col">
+      <section class="panel">
+        <div class="caption" id="caption"></div>
+      </section>
+      <section class="panel">
+        <div class="stage" id="stage">
+          <svg class="arcs" id="arcs" preserveAspectRatio="none" aria-hidden="true"></svg>
+          <div class="tokens" id="tokens"></div>
+          <div class="pred" id="pred" hidden></div>
+        </div>
+        <div class="legend">
+          <span><i class="sw" style="background:var(--pos)"></i>positive number</span>
+          <span><i class="sw" style="background:var(--neg)"></i>negative number</span>
+          <span>Grid = 16 of each token's 128 numbers</span>
+          <span>Bar = how much was added to its notes this step</span>
+        </div>
+      </section>
+    </div>
+
+    <div class="col">
+      <section class="panel">
+        <h2 id="att-title">Who can hear whom</h2>
+        <div class="att-wrap"><table class="att" id="att"></table></div>
+        <p class="att-note" id="att-note"></p>
+      </section>
+      <section class="panel">
+        <h2>The code running now</h2>
+        <pre class="code" id="code"></pre>
+      </section>
+      <p class="fine">All numbers on this page are made up to show the mechanics. They aren't from a trained model. A real model learns its own attention patterns, uses 4 heads per block (one is shown), and predicts from 65 characters.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const D = 16, BLOCKS = 4;
+  const PRESETS = ["hell", "thou ar", "ROMEO:", "to be"];
+  const PRED = {
+    "hell":    [["o", .58], [" ", .13], ["i", .09], ["y", .06], ["e", .04]],
+    "thou ar": [["t", .83], ["e", .07], ["m", .03], [" ", .02], ["r", .01]],
+    "ROMEO:":  [["\n", .71], [" ", .22], ["O", .02], ["I", .01], ["A", .01]],
+    "to be":   [[" ", .46], ["e", .21], ["s", .12], ["c", .07], ["f", .05]],
+  };
+  const BLOCK_NOTE = [
+    "In this illustration, Block 1's head mostly listens to the previous character, which is how a model learns letter pairs.",
+    "Block 2's head listens to itself and to the character two back, a step toward spotting parts of words.",
+    "Block 3's head spreads its attention widely, with extra weight on the first character, to get a sense of the whole context.",
+    "Block 4's head looks for vowels, a pattern that helps it decide what comes next in a word.",
+  ];
+
+  // ---------- deterministic pseudo-randomness ----------
+  const fnv = s => { let x = 2166136261; for (const c of s) { x ^= c.charCodeAt(0); x = Math.imul(x, 16777619); } return x >>> 0; };
+  const rng = a => () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  const noise = (...k) => rng(fnv(k.join("|")))() * 2 - 1;
+  const isVowel = c => "aeiouAEIOU".includes(c);
+  const show = c => c === " " ? "␣" : c === "\n" ? "⏎" : c;
+
+  // ---------- a toy forward pass that follows the same steps as gpt.py ----------
+  function attnWeights(b, chars) {
+    const T = chars.length, A = [];
+    for (let i = 0; i < T; i++) {
+      const s = [];
+      for (let j = 0; j <= i; j++) {
+        let v = 0.25 * noise("a", b, i, j, chars[j]);
+        if (b === 0) v += j === i - 1 ? 2.3 : j === i ? 1.1 : 0;
+        if (b === 1) v += j === i ? 1.5 : i - j === 2 ? 1.5 : 0;
+        if (b === 2) v += 0.2 + (j === 0 ? 0.9 : 0);
+        if (b === 3) v += (isVowel(chars[j]) ? 1.8 : 0) + (j === i - 1 ? 0.7 : 0);
+        s.push(v);
+      }
+      const m = Math.max(...s), e = s.map(x => Math.exp(x - m)), z = e.reduce((a, c) => a + c, 0);
+      A.push(e.map(x => x / z));
+    }
+    return A;
+  }
+  const rmsNorm = v => { const r = Math.sqrt(v.reduce((a, x) => a + x * x, 0) / v.length) || 1; return v.map(x => x / r); };
+  const norm2 = v => Math.sqrt(v.reduce((a, x) => a + x * x, 0));
+
+  function runModel(chars) {
+    const T = chars.length;
+    let X = chars.map((c, i) => rmsNorm(Array.from({ length: D }, (_, d) =>
+      noise("tok", c, d) + 0.6 * Math.sin((i + 1) * (d + 1) * 0.37))));
+    const states = [X], deltas = [X.map(() => 0)], attn = [];
+    for (let b = 0; b < BLOCKS; b++) {
+      // meet: every token mixes in the vectors of itself + earlier tokens
+      const A = attnWeights(b, chars); attn.push(A);
+      const mixed = X.map((_, i) => Array.from({ length: D }, (_, d) =>
+        A[i].reduce((acc, w, j) => acc + w * X[j][(d + 5 * b + j) % D], 0)));
+      let dl = mixed.map(m => norm2(m.map(x => 0.8 * x)));
+      const nonSelf = A.map(row => 1 - row[row.length - 1]);
+      dl = dl.map((x, i) => x * (0.15 + nonSelf[i]));   // hearing only yourself adds little new
+      X = X.map((x, i) => rmsNorm(x.map((v, d) => v + 0.8 * (0.15 + nonSelf[i]) * mixed[i][d])));
+      states.push(X); deltas.push(dl);
+      // think: the same small network, applied to each token separately
+      const W = Array.from({ length: D }, (_, r) => Array.from({ length: D }, (_, c) => noise("W", b, r, c) * 1.6 / Math.sqrt(D)));
+      const out = X.map(x => W.map(row => Math.tanh(row.reduce((a, w, c) => a + w * x[c], 0))));
+      deltas.push(out.map(o => norm2(o.map(x => 0.6 * x))));
+      X = X.map((x, i) => rmsNorm(x.map((v, d) => v + 0.6 * out[i][d])));
+      states.push(X);
+    }
+    return { chars, T, states, deltas, attn };
+  }
+
+  function predictFor(prefix) {
+    if (PRED[prefix]) return PRED[prefix];
+    const last = prefix[prefix.length - 1];
+    let base;
+    if (last === " ") base = ["t", "a", "s", "w", "m"];
+    else if (/[.,:;!?]/.test(last)) base = [" ", "\n", "A", "I", "T"];
+    else if (isVowel(last)) base = ["n", "r", "s", "t", " "];
+    else base = ["e", "a", "o", "i", " "];
+    const raw = base.map((c, k) => [c, (5 - k) * (1 + 0.3 * noise("p", prefix, c))]);
+    const z = raw.reduce((a, [, v]) => a + v, 0);
+    return raw.map(([c, v]) => [c, +(0.82 * v / z).toFixed(2)]).sort((a, b) => b[1] - a[1]);
+  }
+
+  // ---------- steps ----------
+  const STEPS = [{ kind: "io", id: "embed", label: "Embed" }];
+  for (let b = 0; b < BLOCKS; b++) {
+    STEPS.push({ kind: "meet", b, label: `Block ${b + 1} · meet` });
+    STEPS.push({ kind: "think", b, label: `Block ${b + 1} · think` });
+  }
+  STEPS.push({ kind: "io", id: "predict", label: "Predict" });
+
+  const CODE = [
+    ["# GPT.forward", "cm"],
+    ["x = tok_emb(idx) + pos_emb(pos)", "embed"],
+    ["for block in self.blocks:", "loop"],
+    ["    # Block.forward", "cm"],
+    ["    x = x + self.attn(self.ln1(x))", "meet"],
+    ["    x = x + self.mlp(self.ln2(x))", "think"],
+    ["x = self.ln_f(x)", "predict"],
+    ["logits = self.lm_head(x)", "predict"],
+  ];
+
+  // ---------- state ----------
+  let model, cur = 0, sel = 0, timer = null;
+  const $ = id => document.getElementById(id);
+  const tokensEl = $("tokens"), arcsEl = $("arcs"), stageEl = $("stage");
+
+  function build(text) {
+    const chars = [...(text || "hell")].slice(0, 8);
+    model = runModel(chars);
+    sel = model.T - 1;
+    stageEl.style.setProperty("--T", model.T);
+    arcsEl.setAttribute("viewBox", `0 0 ${model.T} 100`);
+    tokensEl.innerHTML = chars.map((c, i) => `
+      <button class="tok" type="button" data-i="${i}" aria-label="Token ${i}: ${c === " " ? "space" : c}">
+        <span class="ch">${show(c).replace(/[<&]/g, m => m === "<" ? "&lt;" : "&amp;")}</span>
+        <span class="seat">seat ${i}</span>
+        <span class="vec">${"<i></i>".repeat(D)}</span>
+        <span class="meter"><b></b></span>
+        <span class="tag"></span>
+        <span class="mlp">MLP<small>128→512→128</small></span>
+      </button>`).join("");
+    tokensEl.querySelectorAll(".tok").forEach(el => el.addEventListener("click", () => { sel = +el.dataset.i; render(); }));
+    render();
+  }
+
+  const stateIndex = s => s.id === "embed" ? 0 : s.id === "predict" ? 2 * BLOCKS : s.kind === "meet" ? 1 + 2 * s.b : 2 + 2 * s.b;
+
+  function cellColor(v) {
+    const a = Math.min(1, Math.abs(v) / 1.8);
+    return `color-mix(in srgb, var(${v >= 0 ? "--pos" : "--neg"}) ${Math.round(12 + a * 78)}%, var(--surface))`;
+  }
+
+  function render() {
+    const step = STEPS[cur], si = stateIndex(step), { T, chars } = model;
+    const X = model.states[si], dl = model.deltas[si] || [];
+    const maxDl = Math.max(1e-6, ...dl);
+    stageEl.dataset.kind = step.kind;
+
+    // timeline
+    $("timeline").querySelectorAll(".chip").forEach((el, k) => {
+      el.classList.toggle("on", k === cur);
+      el.setAttribute("aria-current", k === cur ? "step" : "false");
+    });
+    $("prev").disabled = cur === 0; $("next").disabled = cur === STEPS.length - 1;
+
+    // tokens
+    const A = step.kind === "meet" ? model.attn[step.b] : null;
+    const preds = chars.map((_, i) => predictFor(chars.slice(0, i + 1).join("")));
+    tokensEl.querySelectorAll(".tok").forEach((el, i) => {
+      el.classList.toggle("sel", i === sel);
+      el.querySelectorAll(".vec i").forEach((c, d) => c.style.backgroundColor = cellColor(X[i][d]));
+      el.querySelector(".meter b").style.width = step.id === "embed" ? "0%" : `${Math.round(100 * (dl[i] || 0) / maxDl)}%`;
+      const tag = el.querySelector(".tag");
+      tag.className = "tag";
+      if (step.id === "embed") tag.textContent = `'${show(chars[i])}' + seat ${i}`;
+      else if (step.kind === "meet") {
+        if (i <= sel) { tag.textContent = `${Math.round(A[sel][i] * 100)}%`; tag.classList.add("hot"); }
+        else { tag.textContent = "can't hear"; tag.classList.add("no"); }
+      } else if (step.id === "predict") tag.textContent = `→ ${show(preds[i][0][0])}`;
+      else tag.textContent = "alone";
+    });
+
+    // arcs (who the selected token listens to)
+    let paths = "";
+    if (A) {
+      A[sel].forEach((w, j) => {
+        const xi = sel + 0.5, xj = j + 0.5, sw = (1 + 11 * w).toFixed(1), op = (0.25 + 0.75 * w).toFixed(2);
+        if (j === sel) {
+          paths += `<path d="M ${xi - 0.18} 100 C ${xi - 0.32} 62, ${xi + 0.32} 62, ${xi + 0.18} 100" style="stroke-width:${sw}px;opacity:${op}"/>`;
+        } else {
+          const peak = Math.min(92, 26 + 20 * (sel - j));
+          paths += `<path d="M ${xj} 100 Q ${(xi + xj) / 2} ${100 - 2 * peak} ${xi} 100" style="stroke-width:${sw}px;opacity:${op}"/>`;
+        }
+      });
+    }
+    arcsEl.innerHTML = paths;
+
+    // caption
+    const name = `'${show(chars[sel])}'`;
+    let badge, main, note;
+    if (step.id === "embed") {
+      badge = ["io", "Step 1 · embeddings"];
+      main = "Each character is swapped for a vector of 128 numbers: what it is (tok_emb) plus where it sits (pos_emb). Nothing has mixed yet, so every token knows only itself.";
+      note = "Same character in a different seat = a slightly different vector. That is how the model knows word order.";
+    } else if (step.kind === "meet") {
+      badge = ["meet", `Block ${step.b + 1} of 4 · meeting (attention)`];
+      main = `${name} gathers information from itself and the tokens to its left. A thicker arrow means more attention. Tokens to its right can't be heard: that's the causal mask. Click another token to see who it listens to.`;
+      note = BLOCK_NOTE[step.b] + (sel === 0 ? " Seat 0 has nobody before it, so it can only listen to itself and gains little from the meeting." : "");
+    } else if (step.kind === "think") {
+      badge = ["think", `Block ${step.b + 1} of 4 · thinking (MLP)`];
+      main = "Every token runs through the same MLP on its own, with no arrows and no talking. Its 128 numbers expand to 512, pass through GELU, shrink back to 128, and the result is added to its notes.";
+      note = "All tokens do this at the same time, using the same weights. That's why it can run fast on a GPU.";
+    } else {
+      badge = ["io", "Final step · prediction"];
+      main = `ln_f tidies the vectors, then lm_head turns each one into 65 scores, one per character. The last token's scores predict what comes after "${chars.map(show).join("")}".`;
+      note = "Every position predicts its own next character (shown under each token). During training, all of them are scored against the real text at once.";
+    }
+    $("caption").innerHTML = `<span class="badge ${badge[0]}">${badge[1]}</span><p class="main"></p><p class="note"></p>`;
+    $("caption").querySelector(".main").textContent = main;
+    $("caption").querySelector(".note").textContent = note;
+
+    // prediction bars
+    const pred = $("pred");
+    pred.hidden = step.id !== "predict";
+    if (step.id === "predict") {
+      const p = preds[T - 1], rest = Math.max(0, 1 - p.reduce((a, [, v]) => a + v, 0));
+      pred.innerHTML = `<h2>Next character after the last token</h2>` + p.map(([c, v]) => `
+        <div class="bar"><span class="k">${show(c)}</span><span class="track"><span class="fill" style="display:block;width:${v * 100}%"></span></span><span class="v">${Math.round(v * 100)}%</span></div>`).join("") +
+        `<p class="fine">The other 60 characters share the remaining ${Math.round(rest * 100)}%. generate() rolls weighted dice over these to pick one.</p>`;
+    }
+
+    // attention grid
+    const att = $("att");
+    let h = `<tr><th class="axis" scope="col">hears →</th>${chars.map(c => `<th scope="col">${show(c)}</th>`).join("")}</tr>`;
+    chars.forEach((c, i) => {
+      h += `<tr class="${i === sel ? "selrow" : ""}"><th scope="row">${show(c)}</th>`;
+      chars.forEach((_, j) => {
+        if (j > i) h += `<td class="masked" title="masked: future token">–</td>`;
+        else if (A) {
+          const w = A[i][j];
+          h += `<td style="background:color-mix(in srgb, var(--meet) ${Math.round(w * 85)}%, var(--surface));${w > 0.55 ? "color:var(--surface)" : ""}">${Math.round(w * 100)}</td>`;
+        } else h += `<td>✓</td>`;
+      });
+      h += "</tr>";
+    });
+    att.innerHTML = h;
+    $("att-title").textContent = A ? `Attention weights · Block ${step.b + 1}` : "Who can hear whom";
+    $("att-note").textContent = A
+      ? "Each row is one token's attention, in % (each row adds up to 100). Striped cells are future tokens, blocked by the mask."
+      : step.kind === "think"
+        ? "No attention happens in the thinking step. The mask is shown for reference and is the same in every block."
+        : "✓ = allowed to listen. Striped = blocked by the causal mask. This triangle is the same in every block.";
+
+    // code
+    $("code").innerHTML = CODE.map(([line, k]) => {
+      const on = (k === "embed" && step.id === "embed") || (k === "predict" && step.id === "predict") ||
+                 (k === "meet" && step.kind === "meet") || (k === "think" && step.kind === "think") ||
+                 (k === "loop" && step.b !== undefined);
+      const txt = k === "loop" && step.b !== undefined ? `${line}   # block ${step.b + 1} of 4` : line;
+      return `<span class="${k === "cm" ? "cm" : ""}${on ? " on " + step.kind : ""}">${txt}</span>`;
+    }).join("");
+  }
+
+  // ---------- controls ----------
+  $("timeline").innerHTML = STEPS.map((s, k) => `<button class="chip" type="button" data-kind="${s.kind}" data-k="${k}">${s.label}</button>`).join("");
+  $("timeline").addEventListener("click", e => { const b = e.target.closest("[data-k]"); if (b) { stop(); cur = +b.dataset.k; render(); } });
+  $("presets").innerHTML = PRESETS.map(p => `<button class="chip" type="button" data-p="${p}">${p.replace(/ /g, "␣")}</button>`).join("");
+  $("presets").addEventListener("click", e => { const b = e.target.closest("[data-p]"); if (b) { $("seq").value = b.dataset.p; build(b.dataset.p); } });
+  $("seq").addEventListener("input", e => build(e.target.value || "hell"));
+  const go = d => { cur = Math.max(0, Math.min(STEPS.length - 1, cur + d)); render(); };
+  function stop() { clearInterval(timer); timer = null; $("play").textContent = "Play"; }
+  $("prev").addEventListener("click", () => { stop(); go(-1); });
+  $("next").addEventListener("click", () => { stop(); go(1); });
+  $("play").addEventListener("click", () => {
+    if (timer) return stop();
+    if (cur === STEPS.length - 1) cur = 0;
+    $("play").textContent = "Pause"; render();
+    timer = setInterval(() => { if (cur >= STEPS.length - 1) return stop(); go(1); }, 2600);
+  });
+  document.addEventListener("keydown", e => {
+    if (e.target.tagName === "INPUT") return;
+    if (e.key === "ArrowRight") { stop(); go(1); }
+    if (e.key === "ArrowLeft") { stop(); go(-1); }
+  });
+
+  build("hell");
+})();
+</script>
